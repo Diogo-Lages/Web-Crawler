@@ -26,8 +26,8 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/WebScraper.py.git
-   cd WebScraper.py
+   git clone https://github.com/Diogo-Lages/WebScraper.py.git
+   cd webscraper.py
    ```
 
 2. Install the required libraries:
@@ -37,7 +37,7 @@
 
 3. Run the program:
    ```bash
-   python web_crawler.py
+   python webscraper.py
    ```
 
 ---
