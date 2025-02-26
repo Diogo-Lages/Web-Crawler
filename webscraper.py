@@ -12,14 +12,14 @@ import random
 
 
 class WebsiteCrawler:
-    def __init__(self, base_url, output_dir="downloaded_site", max_depth=3):
+    def __init__(self, base_url, output_dir="downloaded_site", max_depth=3, rate_limit=1):
         self.base_url = base_url
         self.domain = urlparse(base_url).netloc
         self.output_dir = output_dir
         self.visited_urls = set()
-        self.rate_limit = 1  # Delay between requests in seconds
+        self.rate_limit = rate_limit
         self.max_depth = max_depth
-        self.stop_requested = False  # Flag to control crawling
+        self.stop_requested = False
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
@@ -27,167 +27,87 @@ class WebsiteCrawler:
         ]
 
         # Create output directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
     def stop(self):
-        """Request the crawler to stop after the current page."""
         self.stop_requested = True
-        print("\nStop requested. Finishing current page...")
+        print("\n[INFO] Stop requested. Finishing current page...")
 
     def is_valid_url(self, url):
-        """Check if URL belongs to the same domain and is a webpage."""
         try:
             parsed = urlparse(url)
 
-            # Skip any image files
-            image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico')
-            if url.lower().endswith(image_extensions):
-                print(f"Skipping image file: {url}")
+            # Skip any image files or unsupported formats
+            invalid_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico', '.pdf', '.zip', '.doc', '.docx')
+            if url.lower().endswith(invalid_extensions):
+                print(f"[SKIP] Invalid file type: {url}")
                 return False
 
-            # Skip Wikipedia special pages and non-article pages
+            # Skip special pages (e.g., Wikipedia)
             skip_patterns = [
-                '/wiki/Wikipedia:',
-                '/wiki/File:',
-                '/wiki/Help:',
-                '/wiki/Special:',
-                '/wiki/Talk:',
-                '/wiki/User:',
-                '/wiki/Template:',
-                '/wiki/Category:',
-                '/wiki/Portal:',
-                'action=',
-                'oldid=',
-                'diff=',
-                'printable=',
-                'mobileaction='
+                '/wiki/Wikipedia:', '/wiki/File:', '/wiki/Help:', '/wiki/Special:', '/wiki/Talk:',
+                '/wiki/User:', '/wiki/Template:', '/wiki/Category:', '/wiki/Portal:',
+                'action=', 'oldid=', 'diff=', 'printable=', 'mobileaction='
             ]
+            if any(pattern in url for pattern in skip_patterns):
+                print(f"[SKIP] Special page: {url}")
+                return False
 
-            # Check if this is a Wikipedia URL and if so, apply special rules
-            if 'wikipedia.org' in parsed.netloc:
-                # Skip special pages but allow all regular article pages
-                if any(pattern in url for pattern in skip_patterns):
-                    print(f"Skipping Wikipedia special page: {url}")
-                    return False
-
-                # Make sure it's a wiki article page
-                if not '/wiki/' in url:
-                    print(f"Skipping non-article page: {url}")
-                    return False
-
-                # Allow all regular Wikipedia articles
-                if '/wiki/' in url and parsed.netloc == self.domain:
-                    return True
-
-            # For non-Wikipedia sites, use standard validation
+            # Ensure the URL belongs to the same domain
             is_valid = (
-                    parsed.netloc == self.domain and
-                    parsed.scheme in ['http', 'https'] and
-                    not url.endswith(('.pdf', '.zip', '.doc', '.docx'))
+                parsed.netloc == self.domain and
+                parsed.scheme in ['http', 'https']
             )
 
             if not is_valid:
-                print(f"URL rejected: {url}")
+                print(f"[SKIP] URL rejected: {url}")
 
             return is_valid
 
         except Exception as e:
-            print(f"Error parsing URL {url}: {str(e)}")
+            print(f"[ERROR] Error parsing URL {url}: {str(e)}")
             return False
 
     def clean_filename(self, url):
-        """Convert URL to a valid filename."""
         # Remove the domain and scheme
-        filename = urlparse(url).path
-        if not filename or filename.endswith('/'):
-            filename += 'index.html'
-        elif not filename.endswith('.html'):
-            filename += '.html'
+        parsed = urlparse(url)
+        path = parsed.path.strip('/')
+        if not path.endswith('.html'):
+            path += '.html'
 
         # Clean the filename
-        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-        return filename.lstrip('/')
+        filename = re.sub(r'[<>:"/\\|?*]', '_', path)
+        filepath = os.path.join(self.output_dir, filename)
+
+        # Create subdirectories if needed
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        return filepath
 
     def download_page(self, url):
-        """Download a webpage and return its content."""
-        retries = 3
-        for attempt in range(retries):
-            try:
-                headers = {
-                    'User-Agent': random.choice(self.user_agents)
-                }
-                print(f"\nAttempting to download: {url} (Attempt {attempt + 1}/{retries})")
-                response = requests.get(url, timeout=10, headers=headers)
-                response.raise_for_status()
-                print(f"Download successful! Status code: {response.status_code}")
-                print(f"Content length: {len(response.text)} characters")
-                return response.text
-            except requests.exceptions.RequestException as e:
-                print(f"Error downloading {url}: {str(e)}")
-                if attempt < retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
-                else:
-                    return None
+        headers = {"User-Agent": random.choice(self.user_agents)}
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            print(f"[SUCCESS] Downloaded: {url}")
+            return response.text
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to download {url}: {str(e)}")
+            return None
 
     def save_page(self, content, url):
-        """Save webpage content to a file and rewrite links to point to local files."""
-        if content:
-            filename = self.clean_filename(url)
-            filepath = os.path.join(self.output_dir, filename)
-
-            print(f"\nSaving page to: {filepath}")
-
-            try:
-                # Parse the HTML
-                soup = BeautifulSoup(content, 'html.parser')
-
-                # Remove all image elements
-                for img in soup.find_all('img'):
-                    img.decompose()
-
-                # Remove all picture elements
-                for picture in soup.find_all('picture'):
-                    picture.decompose()
-
-                # Remove image-related elements like figure/figcaption if they're empty after image removal
-                for figure in soup.find_all('figure'):
-                    if not figure.find(string=True, recursive=False):
-                        figure.decompose()
-
-                # Rewrite links to point to local files
-                for anchor in soup.find_all('a', href=True):
-                    href = anchor['href']
-                    absolute_url = urljoin(url, href)
-
-                    if absolute_url in self.visited_urls:
-                        # Convert the absolute URL to a local path
-                        local_path = self.clean_filename(absolute_url)
-                        # Make the path relative to the current file
-                        current_depth = len(os.path.dirname(filename).split(os.sep))
-                        relative_path = os.path.relpath(local_path, os.path.dirname(filename))
-                        anchor['href'] = relative_path
-                        print(f"Rewriting link: {href} -> {relative_path}")
-
-                # Create subdirectories if needed
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                print(f"Directory structure created/verified")
-
-                # Save the modified HTML
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(str(soup))
-                print(f"Successfully saved modified HTML to {filename}")
-
-            except Exception as e:
-                print(f"Error saving {filename}: {str(e)}")
-                print(f"Full path attempted: {os.path.abspath(filepath)}")
+        try:
+            filepath = self.clean_filename(url)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"[SUCCESS] Saved: {filepath}")
+        except Exception as e:
+            print(f"[ERROR] Error saving {url}: {str(e)}")
 
     def extract_links(self, content, url):
-        """Extract all valid links from a webpage."""
         soup = BeautifulSoup(content, 'html.parser')
         links = set()
 
-        print(f"\nExtracting links from {url}")
+        print(f"\n[INFO] Extracting links from {url}")
         link_count = 0
 
         for anchor in soup.find_all('a', href=True):
@@ -196,21 +116,16 @@ class WebsiteCrawler:
                 links.add(link)
                 link_count += 1
 
-        print(f"Found {link_count} valid links on this page")
+        print(f"[INFO] Found {link_count} valid links on this page")
         return links
 
     def crawl(self):
-        """Start the crawling process."""
-        # Reset stop flag
-        self.stop_requested = False
-
-        # Queue now contains tuples of (url, depth)
         queue = [(self.base_url, 0)]
         pages_processed = 0
         start_time = time.time()
 
-        print(f"\nStarting crawl of {self.base_url}")
-        print(f"Maximum depth: {self.max_depth}")
+        print(f"\n[INFO] Starting crawl of {self.base_url}")
+        print(f"[INFO] Maximum depth: {self.max_depth}")
 
         while queue and not self.stop_requested:
             url, depth = queue.pop(0)
@@ -219,10 +134,9 @@ class WebsiteCrawler:
                 continue
 
             pages_processed += 1
-            print(f"\n--- Processing page {pages_processed} ---")
-            print(f"URL: {url}")
-            print(f"Depth: {depth}/{self.max_depth}")
-            print(f"Queue size: {len(queue)}")
+            print(f"\n[INFO] Processing page {pages_processed} at depth {depth}/{self.max_depth}")
+            print(f"[INFO] URL: {url}")
+            print(f"[INFO] Queue size: {len(queue)}")
 
             self.visited_urls.add(url)
 
@@ -232,33 +146,31 @@ class WebsiteCrawler:
                 # Save the page
                 self.save_page(content, url)
 
-                # Only add new links if we haven't reached max_depth
+                # Extract and add new links to the queue
                 if depth < self.max_depth - 1:
-                    # Extract and add new links to the queue with incremented depth
                     new_links = self.extract_links(content, url)
                     queue.extend([(link, depth + 1) for link in new_links if link not in self.visited_urls])
 
                 # Rate limiting
                 if queue and not self.stop_requested:
-                    print(f"Waiting {self.rate_limit} seconds before next page...")
+                    print(f"[INFO] Waiting {self.rate_limit} seconds before next page...")
                     time.sleep(self.rate_limit)
 
         elapsed_time = time.time() - start_time
-        print(f"\nCrawling completed!")
+        print(f"\n[INFO] Crawling completed!")
         if self.stop_requested:
-            print("Crawling was stopped by user")
-        print(f"Total pages processed: {pages_processed}")
-        print(f"Total unique URLs visited: {len(self.visited_urls)}")
-        print(f"Total time: {elapsed_time:.2f} seconds")
+            print("[INFO] Crawling was stopped by user")
+        print(f"[INFO] Total pages processed: {pages_processed}")
+        print(f"[INFO] Total unique URLs visited: {len(self.visited_urls)}")
+        print(f"[INFO] Total time: {elapsed_time:.2f} seconds")
 
 
 class WebCrawlerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Web Crawler (Made By: Diogo Lages)")
+        self.root.title("Web Crawler")
         self.root.geometry("600x500")
-        self.root.iconbitmap("pfp.ico")
-        self.crawler = None  # Initialize crawler reference
+        self.crawler = None
 
         # Create main frame
         main_frame = ttk.Frame(root, padding="10")
@@ -275,8 +187,7 @@ class WebCrawlerGUI:
         self.output_var = tk.StringVar(value=os.path.join(os.getcwd(), "downloaded_site"))
         self.output_entry = ttk.Entry(main_frame, textvariable=self.output_var, width=50)
         self.output_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
-        ttk.Button(main_frame, text="Browse", command=self.browse_output).grid(row=1, column=2, sticky=tk.W, pady=5,
-                                                                               padx=5)
+        ttk.Button(main_frame, text="Browse", command=self.browse_output).grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
 
         # Depth input
         ttk.Label(main_frame, text="Maximum depth:").grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -284,9 +195,15 @@ class WebCrawlerGUI:
         depth_entry = ttk.Entry(main_frame, textvariable=self.depth_var, width=10)
         depth_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
 
+        # Rate limit input
+        ttk.Label(main_frame, text="Rate limit (seconds):").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.rate_limit_var = tk.StringVar(value="1")
+        rate_limit_entry = ttk.Entry(main_frame, textvariable=self.rate_limit_var, width=10)
+        rate_limit_entry.grid(row=3, column=1, sticky=tk.W, pady=5)
+
         # Progress frame
         progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="5")
-        progress_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
 
         # Progress bar
         self.progress_var = tk.StringVar(value="Ready")
@@ -294,16 +211,16 @@ class WebCrawlerGUI:
 
         # Log text area
         self.log_text = tk.Text(main_frame, height=15, width=60, wrap=tk.WORD)
-        self.log_text.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        self.log_text.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
 
         # Scrollbar for log
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        scrollbar.grid(row=4, column=3, sticky=(tk.N, tk.S))
+        scrollbar.grid(row=5, column=3, sticky=(tk.N, tk.S))
         self.log_text.configure(yscrollcommand=scrollbar.set)
 
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=5, column=0, columnspan=3, pady=10)
+        button_frame.grid(row=6, column=0, columnspan=3, pady=10)
 
         # Start button
         self.start_button = ttk.Button(button_frame, text="Start Crawling", command=self.start_crawling)
@@ -320,29 +237,26 @@ class WebCrawlerGUI:
         sys.stdout = self
 
     def write(self, text):
-        """Handle stdout redirection"""
-        self.log_text.insert(tk.END, text)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.log_text.insert(tk.END, f"[{timestamp}] {text}")
         self.log_text.see(tk.END)
         self.root.update_idletasks()
 
     def flush(self):
-        """Required for stdout redirection"""
         pass
 
     def browse_output(self):
-        """Open directory browser"""
         directory = filedialog.askdirectory(initialdir=self.output_var.get())
         if directory:
             self.output_var.set(directory)
 
     def stop_crawling(self):
-        """Stop the crawling process"""
         self.stop_button.configure(state='disabled')
         self.progress_var.set("Stopping...")
-        self.crawler.stop()  # Request the crawler to stop
+        if self.crawler:
+            self.crawler.stop()
 
     def start_crawling(self):
-        """Start the crawling process"""
         # Validate inputs
         url = self.url_var.get().strip()
         output_dir = self.output_var.get().strip()
@@ -353,6 +267,14 @@ class WebCrawlerGUI:
                 raise ValueError("Depth must be at least 1")
         except ValueError as e:
             messagebox.showerror("Error", "Invalid depth value. Please enter a positive number.")
+            return
+
+        try:
+            rate_limit = float(self.rate_limit_var.get())
+            if rate_limit < 0:
+                raise ValueError("Rate limit must be non-negative")
+        except ValueError as e:
+            messagebox.showerror("Error", "Invalid rate limit value. Please enter a non-negative number.")
             return
 
         if not url:
@@ -375,7 +297,7 @@ class WebCrawlerGUI:
         # Start crawling in a separate thread
         def crawl_thread():
             try:
-                self.crawler = WebsiteCrawler(url, output_dir, depth)
+                self.crawler = WebsiteCrawler(url, output_dir, depth, rate_limit)
                 self.stop_button.configure(state='normal')  # Enable stop button
                 self.crawler.crawl()
                 if self.crawler.stop_requested:
@@ -388,7 +310,6 @@ class WebCrawlerGUI:
         threading.Thread(target=crawl_thread, daemon=True).start()
 
     def crawling_finished(self, success, error_message=None):
-        """Called when crawling is complete"""
         # Re-enable inputs
         self.start_button.configure(state='normal')
         self.url_entry.configure(state='normal')
