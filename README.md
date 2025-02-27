@@ -26,7 +26,7 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Diogo-Lages/Web_Scraper.py.git
+   git clone https://github.com/Diogo-Lages/Web-Scraper.git
    cd Web_Scraper.py
    ```
 
