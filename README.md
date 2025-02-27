@@ -27,7 +27,7 @@
 1. Clone the repository:
    ```bash
    git clone https://github.com/Diogo-Lages/Web-Scraper.git
-   cd Web_Scraper.py
+   cd Web-Scraper
    ```
 
 2. Install the required libraries:
