@@ -1,67 +1,74 @@
-# WebScraper.py
+# Web Crawler
 
-**WebScraper.py** is a Python-based web scraping and crawling tool with a **graphical user interface (GUI)**. It allows users to crawl websites, download pages, and save them locally with features like depth control, rate limiting, and real-time logging.
-
----
+Web Crawler is a user-friendly desktop application designed to crawl websites while respecting `robots.txt` rules, managing proxies, and providing real-time statistics and visualizations.
 
 ## Features
 
-- **GUI Interface**: Built with `tkinter` for ease of use.
-- **Depth Control**: Set the maximum depth for crawling.
-- **Local Saving**: Downloads and saves web pages locally.
-- **Rate Limiting**: Configurable delay between requests.
-- **Stop Functionality**: Stop the crawling process at any time.
-- **Real-Time Logging**: Live updates in the GUI.
-
----
+- **GUI Interface**: Easy-to-use graphical interface for configuring and controlling the crawler.
+- **Robots.txt Compliance**: Automatically checks and respects website crawling rules defined in `robots.txt`.
+- **Proxy Management**: Supports proxy rotation to avoid IP blocking during large-scale crawls.
+- **URL Filtering**: Includes and excludes URLs based on customizable patterns and domain restrictions.
+- **Real-Time Statistics**: Displays live metrics such as pages crawled, memory usage, queue size, and errors.
+- **Data Visualization**: Provides dynamic graphs for crawl speed, memory usage, and URLs in the queue.
+- **Export Options**: Export crawled data in HTML, JSON, or CSV formats for further analysis.
+- **Pause/Resume/Stop**: Full control over the crawling process with pause, resume, and stop functionality.
+- **Concurrency**: Configurable number of concurrent workers for efficient crawling.
 
 ## Requirements
 
-- Python 3.x
-- Libraries: `tkinter`, `requests`, `beautifulsoup4`
-
----
+- Python 3.8 or higher
+- Required Python libraries:
+  - `requests`
+  - `beautifulsoup4`
+  - `matplotlib`
+  - `pandas`
+  - `psutil`
+  - `urllib3`
 
 ## Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Diogo-Lages/Web-Scraper.git
-   cd Web-Scraper
+   git clone https://github.com/Diogo-Lages/Web-Crawler.git
+   cd Web-Crawler
    ```
 
-2. Install the required libraries:
+2. Install the required Python libraries manually using pip:
    ```bash
-   pip install requests beautifulsoup4
+   pip install requests beautifulsoup4 matplotlib pandas psutil urllib3
    ```
 
-3. Run the program:
+3. Run the application:
    ```bash
-   python webscraper.py
+   python webcrawler.py
    ```
-
----
 
 ## Usage
 
-1. Enter the **URL** to crawl in the GUI.
-2. Specify the **output directory**.
-3. Set the **maximum depth**.
-4. Click **Start Crawling** to begin.
-5. Use the **Stop** button to halt the process.
-
----
+1. **Start the Application**: Launch the program by running `webcrawler.py`. A GUI window will appear.
+2. **Configure Settings**:
+   - Enter the starting URL.
+   - Set the maximum depth for crawling.
+   - Adjust the number of concurrent workers and rate limit.
+   - Add include/exclude URL patterns if needed.
+3. **Start Crawling**: Click the "Start" button to begin crawling. The status and statistics will update in real-time.
+4. **Pause/Resume/Stop**: Use the respective buttons to control the crawling process.
+5. **Export Data**: Once crawling is complete, export the results in HTML, JSON, or CSV format using the "Export Report" button.
 
 ## Code Structure
 
-- **`WebsiteCrawler` Class**: Core crawling logic.
-- **`WebCrawlerGUI` Class**: Manages the GUI and threading.
-- **Main Function**: Initializes the GUI.
+The project is organized into the following modules:
 
----
+- **`crawler/`**: Contains core functionality for crawling, proxy management, robots.txt parsing, and statistics tracking.
+  - `proxy_manager.py`: Manages proxy rotation.
+  - `robots.py`: Handles robots.txt compliance.
+  - `stats.py`: Tracks crawling statistics.
+  - `url_filter.py`: Filters URLs based on patterns and domains.
+- **`gui/`**: Implements the graphical user interface.
+  - `dashboard.py`: Displays real-time statistics and logs.
+  - `visualization.py`: Provides dynamic graphs for monitoring the crawl process.
+- **`webcrawler.py`**: Entry point of the application, initializes the GUI and starts the crawler.
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
-
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
